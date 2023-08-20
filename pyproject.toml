@@ -5,7 +5,7 @@ description = ""
 authors = ["Alexey Gorbatovski <porsh-5@yandex.ru>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "llm_voter_web"}]
+packages = [{include = "*"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
