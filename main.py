@@ -44,7 +44,7 @@ async def startup_event():
 
 @app.get("/", response_class=HTMLResponse)
 async def display_question(request: Request):
-    with engine.connect() as connection:
+    with engine.begin() as connection:
         # Получаем следующий вопрос со статусом "waiting"
         s = (
             select(questions_answers)
@@ -55,9 +55,15 @@ async def display_question(request: Request):
 
         if not question_data:
             logging.info("No questions with status 'waiting' found in the database.")
-            return JSONResponse(
-                content={"message": "No questions available for review"}
-            )
+            return templates.TemplateResponse("no_questions.html", {"request": request})
+
+        
+        stmt = (
+            update(questions_answers)
+            .where(questions_answers.c.q_id == question_data.q_id)
+            .values(status="in_process", last_accessed=func.now())
+        )
+        connection.execute(stmt)
 
         logging.info(
             f"Found question with ID {question_data.q_id} and title '{question_data.title}'."
@@ -164,10 +170,7 @@ async def handle_question(
                 },
             )
         else:
-            return JSONResponse(
-                content={"message": "No questions available for review"}
-            )
-
+            return templates.TemplateResponse("no_questions.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn
