@@ -1,0 +1,26 @@
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f5f5f5;
+}
+
+strong {
+  color: #041d36; /* цвет для выделения */
+}
+
+.bg-success-light {
+  background-color: #d0fada;
+}
+
+.bg-danger-light {
+  background-color: #f7e2e2;
+}
+
+.lead strong {
+  font-weight: bold;
+}
+
+.jumbotron {
+  background-color: #fbfcdd;
+  color: #000000;
+  padding: 1rem 2rem;
+}

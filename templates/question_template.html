@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Review</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', path='css/styles.css') }}">
+</head>
+
+<body class="bg-light py-3">
+    <div class="container">
+        <div class="jumbotron">
+            <h2 class="my-2"><strong>Title:</strong> {{ title }}</h2>
+            <p class="lead"><strong>Question:</strong> {{ question }}</p>
+            <hr class="my-2">
+            <p><strong>Stack Overflow Answer:</strong> {{ answer }}</p>
+        </div>
+
+        <form action="/" method="post" onsubmit="return beforeSubmit();" class="bg-white p-4 rounded shadow-sm">
+            <input type="hidden" name="q_id" value="{{ q_id }}">
+
+            {% for gen_answer in generated_answers %}
+            <div class="row border-bottom pb-3 mb-3 answer-block">
+                <div class="col-md-8">
+                    <h5>{{ gen_answer.generated_answer }}</h5>
+                </div>
+                <div class="col-md-4 d-flex flex-column justify-content-start">
+                    <div class="mb-2">
+                        <label>Is this answer correct?</label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-light">
+                                <input type="radio" name="rights_{{ gen_answer.csv_gen_id + 1 }}" value="true"
+                                    onchange="updateAnswerColor(this)"> Yes
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="rights_{{ gen_answer.csv_gen_id + 1 }}" value="false"
+                                    onchange="updateAnswerColor(this)"> No
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label>Rank:</label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-light">
+                                <input type="radio" name="rating_{{ gen_answer.csv_gen_id + 1 }}" value="1"> 1
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="rating_{{ gen_answer.csv_gen_id + 1 }}" value="2"> 2
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="rating_{{ gen_answer.csv_gen_id + 1 }}" value="3"> 3
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" name="gen_id_{{ gen_answer.csv_gen_id + 1 }}" value="{{ gen_answer.gen_id }}">
+            </div>
+            {% endfor %}
+            <button type="submit" id="submit" class="btn btn-primary btn-lg btn-block" disabled>Submit</button>
+        </form>
+    </div>
+
+    <script src="{{ url_for('static', path='js/scripts.js') }}"></script>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+
+
+</html>
