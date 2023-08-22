@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, BackgroundTasks, Form
+from fastapi import FastAPI, Request, Form
 from models.database import engine
 from models.questions import questions_answers, generated_answers, user_ratings_table
 from sqlalchemy.sql import select, update, insert
@@ -9,23 +9,9 @@ from sqlalchemy import func
 import time
 import os
 import logging
+import uuid
 
 logging.basicConfig(level=logging.INFO)
-
-
-def timeout_checker():
-    timeout = 10 * 60
-    while True:
-        with engine.connect() as connection:
-            stmt = (
-                update(questions_answers)
-                .where((func.now() - questions_answers.c.last_accessed) > timeout)
-                .where(questions_answers.c.status == "in_process")
-                .values(status="waiting")
-            )
-            connection.execute(stmt)
-        time.sleep(60)
-
 
 app = FastAPI()
 
@@ -36,45 +22,115 @@ print(static_folder)
 app.mount("/static", StaticFiles(directory=static_folder), name="static")
 
 
-@app.on_event("startup")
-async def startup_event():
-    bg_tasks = BackgroundTasks()
-    bg_tasks.add_task(timeout_checker)
-
-
-@app.get("/", response_class=HTMLResponse)
-async def display_question(request: Request):
+async def get_next_question():
     with engine.begin() as connection:
-        # Получаем следующий вопрос со статусом "waiting"
         s = (
-            select(questions_answers)
-            .where(questions_answers.c.status == "waiting")
+            select(
+                questions_answers.c.qa_id,
+                questions_answers.c.q_id,
+                questions_answers.c.title,
+                questions_answers.c.question,
+                questions_answers.c.answer,
+            )
+            .join(generated_answers, questions_answers.c.qa_id == generated_answers.c.qa_id)
+            .group_by(questions_answers.c.q_id, questions_answers.c.qa_id)
+            .order_by(questions_answers.c.rating_count.asc())
             .limit(1)
         )
         question_data = connection.execute(s).fetchone()
 
         if not question_data:
-            logging.info("No questions with status 'waiting' found in the database.")
-            return templates.TemplateResponse("no_questions.html", {"request": request})
-
-        
-        stmt = (
-            update(questions_answers)
-            .where(questions_answers.c.q_id == question_data.q_id)
-            .values(status="in_process", last_accessed=func.now())
-        )
-        connection.execute(stmt)
-
-        logging.info(
-            f"Found question with ID {question_data.q_id} and title '{question_data.title}'."
-        )
+            return None
 
         s = select(generated_answers).where(
             generated_answers.c.qa_id == question_data.qa_id
         )
         generated_answers_data = connection.execute(s).fetchall()
 
-        content = templates.TemplateResponse(
+        return question_data, generated_answers_data
+
+
+@app.get("/", response_class=HTMLResponse)
+async def display_question(request: Request):
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    question_data, generated_answers_data = await get_next_question()
+    logging.info(f"GET data: q_id={question_data.q_id} and session_id={session_id}")
+
+    if not question_data:
+        logging.info("No questions found in the database.")
+        return templates.TemplateResponse("no_questions.html", {"request": request})
+
+    content = templates.TemplateResponse(
+        "question_template.html",
+        {
+            "request": request,
+            "title": question_data.title,
+            "question": question_data.question,
+            "answer": question_data.answer,
+            "generated_answers": generated_answers_data,
+            "q_id": question_data.q_id,
+        },
+    )
+
+    response = Response(content.body, media_type="text/html")
+    response.set_cookie(key="session_id", value=session_id)
+    response.headers[
+        "Cache-Control"
+    ] = "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    return response
+
+
+@app.post("/", response_class=HTMLResponse)
+async def handle_question(request: Request, q_id: int = Form(...)):
+    form_data = await request.form()
+    session_id = request.cookies.get("session_id")
+    logging.info(f"Received POST data: q_id={q_id} and session_id={session_id}")
+    with engine.begin() as connection:
+        for key, value in form_data.items():
+            if key.startswith("gen_id_"):
+                gen_id = int(value)
+                rating = form_data.get(f"rating_{gen_id}")
+                relevance = bool(form_data.get(f"relevance_{gen_id}"))
+                correctness = bool(form_data.get(f"correctness_{gen_id}"))
+                usefulness = bool(form_data.get(f"usefulness_{gen_id}"))
+                justification = bool(form_data.get(f"justification_{gen_id}"))
+
+                # Insert the rating for the generated answer
+                stmt = insert(user_ratings_table).values(
+                    session_id=session_id,
+                    gen_id=gen_id,
+                    rating_value=rating,
+                    relevance=relevance,
+                    correctness=correctness,
+                    usefulness=usefulness,
+                    justification=justification,
+                )
+                connection.execute(stmt)
+
+                # Get the related qa_id for the gen_id
+                s = select(generated_answers.c.qa_id).where(
+                    generated_answers.c.gen_id == gen_id
+                )
+                related_qa_id = connection.execute(s).scalar()
+
+                # Update the rating count for the question in questions_answers
+                update_stmt = (
+                    update(questions_answers)
+                    .where(questions_answers.c.qa_id == related_qa_id)
+                    .values(rating_count=questions_answers.c.rating_count + 1)
+                )
+                connection.execute(update_stmt)
+
+    question_data, generated_answers_data = await get_next_question()
+
+    if question_data:
+        return templates.TemplateResponse(
             "question_template.html",
             {
                 "request": request,
@@ -85,92 +141,9 @@ async def display_question(request: Request):
                 "q_id": question_data.q_id,
             },
         )
+    else:
+        return templates.TemplateResponse("no_questions.html", {"request": request})
 
-        response = Response(content.body, media_type="text/html")
-        response.headers[
-            "Cache-Control"
-        ] = "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-
-        return response
-
-
-@app.post("/", response_class=HTMLResponse)
-async def handle_question(
-    request: Request,
-    q_id: int = Form(...),
-    gen_id_1: int = Form(...),
-    rating_1: int = Form(...),
-    rights_1: bool = Form(...),
-    gen_id_2: int = Form(...),
-    rating_2: int = Form(...),
-    rights_2: bool = Form(...),
-    gen_id_3: int = Form(...),
-    rating_3: int = Form(...),
-    rights_3: bool = Form(...),
-):
-    logging.info(f"Received POST data: q_id={q_id}")
-    with engine.begin() as connection:
-        ratings = [
-            {"gen_id": gen_id_1, "rating": rating_1, "rights": rights_1},
-            {"gen_id": gen_id_2, "rating": rating_2, "rights": rights_2},
-            {"gen_id": gen_id_3, "rating": rating_3, "rights": rights_3},
-        ]
-        for rating in ratings:
-            stmt = insert(user_ratings_table).values(
-                gen_id=rating["gen_id"],
-                rating_value=rating["rating"],
-                rights=rating["rights"],
-            )
-            connection.execute(stmt)
-
-        stmt = (
-            update(questions_answers)
-            .where(questions_answers.c.q_id == q_id)
-            .values(status="processed")
-        )
-        connection.execute(stmt)
-
-        # Получаем следующий вопрос со статусом "waiting"
-        s = (
-            select(questions_answers)
-            .where(questions_answers.c.status == "waiting")
-            .limit(1)
-        )
-        next_question_data = connection.execute(s).fetchone()
-
-        # Если следующий вопрос найден, меняем его статус на "in_process"
-        if next_question_data:
-            stmt = (
-                update(questions_answers)
-                .where(questions_answers.c.q_id == next_question_data.q_id)
-                .values(status="in_process", last_accessed=func.now())
-            )
-            connection.execute(stmt)
-
-            s = select(generated_answers).where(
-                generated_answers.c.qa_id == next_question_data.qa_id
-            )
-            generated_answers_data = connection.execute(s).fetchall()
-
-            logging.info(
-                f"Found question with ID {next_question_data.q_id} and title '{next_question_data.title}'."
-            )
-
-            return templates.TemplateResponse(
-                "question_template.html",
-                {
-                    "request": request,
-                    "title": next_question_data.title,
-                    "question": next_question_data.question,
-                    "answer": next_question_data.answer,
-                    "generated_answers": generated_answers_data,
-                    "q_id": next_question_data.q_id,
-                },
-            )
-        else:
-            return templates.TemplateResponse("no_questions.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn

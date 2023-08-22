@@ -9,14 +9,28 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
+def get_csv_id_from_filename(filename):
+    """Извлекает идентификатор CSV из имени файла."""
+    try:
+        return int(filename.split("_")[-1].split(".")[0])
+    except (IndexError, ValueError):
+        logging.error(f"Unable to extract CSV ID from filename: {filename}")
+        return None
+
+
 def populate_database(csv_path):
-    df = pd.read_csv(csv_path, lineterminator='\n')
+    df = pd.read_csv(csv_path, lineterminator="\n")
+    csv_id = get_csv_id_from_filename(csv_path.split("/")[-1])
+
+    if not csv_id:
+        logging.error("Failed to process the file due to invalid filename format.")
+        return
 
     if df.empty:
         logging.info("CSV file is empty. Exiting...")
         return
 
-    processed_q_ids = set()
+    processed_q_ids = {}
 
     logging.info(f"Starting to populate the database with {len(df)} rows from the CSV.")
 
@@ -25,24 +39,34 @@ def populate_database(csv_path):
             q_id = int(row["Q_Id"])
 
             # Если этот Q_Id еще не был обработан
-            if q_id not in processed_q_ids:
+            if q_id not in processed_q_ids or csv_id not in processed_q_ids[q_id]:
                 # Добавляем запись в таблицу questions_answers
                 stmt = insert(questions_answers).values(
                     q_id=row["Q_Id"],
                     title=row["Title"],
                     question=row["Question"],
                     answer=row["Answer"],
+                    csv_id=csv_id,
                 )
                 try:
                     result = connection.execute(stmt)
                 except Exception as e:
                     logging.error(f"Error while inserting data: {e}")
                 qa_id = result.inserted_primary_key[0]
-                processed_q_ids.add(q_id)
-                logging.info(f"Added question with Q_Id {q_id} and Title '{row['Title'][:20]}...' to the database.")
+                if q_id not in processed_q_ids:
+                    processed_q_ids[q_id] = [csv_id]
+                else:
+                    processed_q_ids[q_id].append(csv_id)
+
+                logging.info(
+                    f"Added question with Q_Id {q_id} and Title '{row['Title'][:20]}...' to the database."
+                )
             else:
                 # Получаем qa_id для текущего Q_Id
-                s = questions_answers.select().where(questions_answers.c.q_id == q_id)
+                s = questions_answers.select().where(
+                    (questions_answers.c.q_id == q_id)
+                    & (questions_answers.c.csv_id == csv_id)
+                )
                 qa_id = connection.execute(s).fetchone()[0]
 
             # Добавляем сгенерированный ответ в таблицу generated_answers
@@ -53,7 +77,7 @@ def populate_database(csv_path):
             )
             connection.execute(stmt)
             logging.info(f"Added generated answer for Q_Id {q_id}.")
-        
+
     logging.info("Finished populating DB")
 
 

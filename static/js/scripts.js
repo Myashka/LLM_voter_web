@@ -1,5 +1,24 @@
+function convertCritToBoolean() {
+  let criteria = [
+    "relevance_",
+    "correctness_",
+    "usefulness_",
+    "justification_",
+  ];
+
+  criteria.forEach((prefix) => {
+    let radios = document.querySelectorAll(`[name^="${prefix}"]:checked`);
+    radios.forEach((radio) => {
+      if (radio.value === "true") {
+        radio.value = true;
+      } else if (radio.value === "false") {
+        radio.value = false;
+      }
+    });
+  });
+}
+
 function beforeSubmit() {
-  convertRightsToBoolean();
   if (hasDuplicateRanks()) {
     alert("Please ensure that all ranks are unique.");
     return false;
@@ -10,15 +29,27 @@ function beforeSubmit() {
 function validateForm(event) {
   let totalGeneratedAnswers = document.querySelectorAll(".answer-block").length;
 
-  let rightsChecked = document.querySelectorAll(
-    '[name^="rights_"]:checked'
+  let relevanceChecked = document.querySelectorAll(
+    '[name^="relevance_"]:checked'
+  ).length;
+  let correctnessChecked = document.querySelectorAll(
+    '[name^="correctness_"]:checked'
+  ).length;
+  let usefulnessChecked = document.querySelectorAll(
+    '[name^="usefulness_"]:checked'
+  ).length;
+  let justificationChecked = document.querySelectorAll(
+    '[name^="justification_"]:checked'
   ).length;
   let ranksChecked = document.querySelectorAll(
     '[name^="rating_"]:checked'
   ).length;
 
   if (
-    rightsChecked === totalGeneratedAnswers &&
+    relevanceChecked === totalGeneratedAnswers &&
+    correctnessChecked === totalGeneratedAnswers &&
+    usefulnessChecked === totalGeneratedAnswers &&
+    justificationChecked === totalGeneratedAnswers &&
     ranksChecked === totalGeneratedAnswers &&
     !hasDuplicateRanks()
   ) {
@@ -45,14 +76,20 @@ function updateAnswerColor(radioInput) {
   } else {
     answerBlock.classList.remove("bg-danger-light", "bg-success-light");
   }
-
-  validateForm();
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  let rights = document.querySelectorAll('[name^="rights_"]');
-  let ranks = document.querySelectorAll('[name^="rating_"]');
+  let criteria = [
+    '[name^="relevance_"]',
+    '[name^="correctness_"]',
+    '[name^="usefulness_"]',
+    '[name^="justification_"]',
+    '[name^="rating_"]',
+  ];
 
-  rights.forEach((radio) => radio.addEventListener("click", validateForm));
-  ranks.forEach((radio) => radio.addEventListener("click", validateForm));
+  criteria.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((radio) => {
+      radio.addEventListener("click", validateForm);
+    });
+  });
 });

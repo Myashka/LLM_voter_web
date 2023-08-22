@@ -29,16 +29,50 @@
                     <h5>{{ gen_answer.generated_answer }}</h5>
                 </div>
                 <div class="col-md-4 d-flex flex-column justify-content-start">
+                    <label>Is this answer:</label>
                     <div class="mb-2">
-                        <label>Is this answer correct?</label>
+                        <label><strong>relevant</strong></label>
                         <div class="btn-group btn-group-toggle" data-toggle="buttons">
                             <label class="btn btn-light">
-                                <input type="radio" name="rights_{{ gen_answer.csv_gen_id + 1 }}" value="true"
+                                <input type="radio" name="relevance_{{ gen_answer.csv_gen_id + 1 }}" value="true"> Yes
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="relevance_{{ gen_answer.csv_gen_id + 1 }}" value="false"> No
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label><strong>correct</strong></label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-light">
+                                <input type="radio" name="correctness_{{ gen_answer.csv_gen_id + 1 }}" value="true"
                                     onchange="updateAnswerColor(this)"> Yes
                             </label>
                             <label class="btn btn-light">
-                                <input type="radio" name="rights_{{ gen_answer.csv_gen_id + 1 }}" value="false"
+                                <input type="radio" name="correctness_{{ gen_answer.csv_gen_id + 1 }}" value="false"
                                     onchange="updateAnswerColor(this)"> No
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label><strong>useful</strong></label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-light">
+                                <input type="radio" name="usefulness_{{ gen_answer.csv_gen_id + 1 }}" value="true"> Yes
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="usefulness_{{ gen_answer.csv_gen_id + 1 }}" value="false"> No
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label><strong>justified</strong></label>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-light">
+                                <input type="radio" name="justification_{{ gen_answer.csv_gen_id + 1 }}" value="true"> Yes
+                            </label>
+                            <label class="btn btn-light">
+                                <input type="radio" name="justification_{{ gen_answer.csv_gen_id + 1 }}" value="false"> No
                             </label>
                         </div>
                     </div>
@@ -63,12 +97,11 @@
             <button type="submit" id="submit" class="btn btn-primary btn-lg btn-block" disabled>Submit</button>
         </form>
     </div>
-
-    <script src="{{ url_for('static', path='js/scripts.js') }}"></script>
-
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script src="{{ url_for('static', path='js/scripts.js') }}"></script>
 </body>
 
 
